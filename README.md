@@ -52,6 +52,8 @@ ansible-playbook setup.yml
 
 ## Customization
 
+**Package management** — the `my_packages` variable in `setup.yml` contains the packages I consider necessary for my daily workflow. You can remove or add packages to fit your needs, but be aware that modifying this list may cause the playbook to fail. For example, if you add a package that does not exist in the configured repositories, the playbook will error out.
+
 **Static IP configuration** — by default, the network task is disabled (`nic_conf.flag: false`). To configure a static IP on a network interface, change the flag to `true` and fill in the connection details:
 
 | Variable | What it is | Example |
