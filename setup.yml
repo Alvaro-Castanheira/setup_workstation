@@ -156,7 +156,7 @@
         value: "':minimize,maximize,close'"
       
     - name: Configure Static IP on Network Interface
-      when: nic_conf.flag == 'true'
+      when: nic_conf.flag
       become: true
       community.general.nmcli:
         conn_name: "{{ nic_conf.my_conn_name }}"
