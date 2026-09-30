@@ -83,14 +83,6 @@
       ansible.builtin.shell:
         cmd: curl -fsSL https://sshcontrol.alexeiev.me/install | bash
 
-    - name: Create a directory for config file
-      ansible.builtin.file:                                                                                             
-        path: "{{ my_home_dir }}/.sshControl"                                                                                             
-        state: directory                                                                                                                 
-        mode: '0755'
-        owner: "{{ my_user }}"
-        group: "{{ my_user }}"
-
     - name: Set up zsh as the default shell for the user
       become: true
       ansible.builtin.user:
