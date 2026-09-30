@@ -1,0 +1,170 @@
+---
+- name: Setup fedora workstation
+  hosts: localhost 
+  become: false
+  gather_facts: false
+  vars:
+    my_user: "your_user"
+    my_home_dir: "your_user_homedir"
+    nic_conf:
+      flag: false
+      my_conn_name: "example-con"
+      my_ifname: "your_interface"
+      my_ip4: "your_network"
+      my_gw4: "your_gateway"
+      my_dns4: "your dns(s)"
+    
+    my_packages:
+      - google-chrome-stable
+      - terminator
+      - podman-compose
+      - zsh
+      - teams-for-linux
+      - code
+      - git
+
+  tasks:
+    - name:  Instaling Vscode repository
+      become: true
+      ansible.builtin.yum_repository:
+        name: code
+        description: Visual studio code
+        baseurl: https://packages.microsoft.com/yumrepos/vscode
+        enabled: true
+        gpgcheck: true
+        gpgkey: https://packages.microsoft.com/keys/microsoft.asc
+      
+    - name: Add Google Chrome repository
+      become: true
+      ansible.builtin.yum_repository:
+        name: google-chrome
+        description: Google Chrome Repository
+        baseurl: https://dl.google.com/linux/chrome/rpm/stable/x86_64
+        enabled: true
+        gpgcheck: true
+        gpgkey: https://dl.google.com/linux/linux_signing_key.pub
+
+    - name: Import GPG key for teams-for-linux
+      become: true
+      ansible.builtin.rpm_key:
+        key: https://repo.teamsforlinux.de/teams-for-linux.asc
+        state: present
+
+    - name: Add teams-for-linux repository
+      become: true
+      ansible.builtin.get_url:
+        url: https://repo.teamsforlinux.de/rpm/teams-for-linux.repo
+        dest: /etc/yum.repos.d/teams-for-linux.repo
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Install packages with dnf
+      become: true
+      ansible.builtin.dnf:
+        name: "{{ my_packages }}"
+        state: present
+
+    - name: Check for Ssh Control installation
+      ansible.builtin.command:
+        cmd: sc --version
+      register: ssh_control_check
+      ignore_errors: true
+      changed_when: false
+
+    - name: Display Ssh Control version if installed
+      when: ssh_control_check.rc == 0
+      ansible.builtin.debug:
+        msg: "Ssh Control is already installed. Version: {{ ssh_control_check.stdout }}"
+
+    - name: Ensure Ssh Control is installed
+      when: ssh_control_check.rc != 0
+      changed_when: true
+      ansible.builtin.shell:
+        cmd: curl -fsSL https://sshcontrol.alexeiev.me/install | bash
+
+    - name: Create a directory for config file
+      ansible.builtin.file:                                                                                             
+        path: "{{ my_home_dir }}/.sshControl"                                                                                             
+        state: directory                                                                                                                 
+        mode: '0755'
+        owner: "{{ my_user }}"
+        group: "{{ my_user }}"
+
+    - name: Set up zsh as the default shell for the user
+      become: true
+      ansible.builtin.user:
+        name: "{{ my_user }}"
+        shell: /usr/bin/zsh
+
+    - name: Clone Oh My Zsh repository
+      ansible.builtin.git:
+        repo: https://github.com/ohmyzsh/ohmyzsh.git
+        dest: "{{ my_home_dir }}/.oh-my-zsh"
+        depth: 1
+
+    - name: Copy base config for .zshrc
+      ansible.builtin.copy:
+        src: "{{ my_home_dir }}/.oh-my-zsh/templates/zshrc.zsh-template"
+        dest: "{{ my_home_dir }}/.zshrc"
+        force: false
+
+    - name: Install zsh-autosuggestions plugin
+      ansible.builtin.git:
+        repo: https://github.com/zsh-users/zsh-autosuggestions.git
+        dest: "{{ my_home_dir }}/.oh-my-zsh/custom/plugins/zsh-autosuggestions"
+        depth: 1
+    
+    - name: Install zsh-syntax-highlighting plugin
+      ansible.builtin.git:
+        repo: https://github.com/zsh-users/zsh-syntax-highlighting.git
+        dest: "{{ my_home_dir }}/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting"
+        depth: 1
+
+    - name: Activate .zshrc plugins
+      ansible.builtin.lineinfile:
+        path: "{{ my_home_dir }}/.zshrc"
+        regexp: '^plugins=\(.*\)'
+        line: 'plugins=(git zsh-autosuggestions zsh-syntax-highlighting)'
+
+    - name: Install FiraCode font (Nerd Fonts) for p10k icon support
+      become: true
+      ansible.builtin.dnf:
+        name: fira-code-fonts
+        state: present
+    
+    - name: Clone the Powerlevel10k theme for Oh My Zsh
+      ansible.builtin.git:
+        repo: https://github.com/romkatv/powerlevel10k.git
+        dest: "{{ my_home_dir }}/.oh-my-zsh/custom/themes/powerlevel10k"
+        depth: 1
+
+    - name: Configure Powerlevel10k in .zshrc
+      ansible.builtin.lineinfile:
+        path: "{{ my_home_dir }}/.zshrc"
+        regexp: '^ZSH_THEME='
+        line: 'ZSH_THEME="powerlevel10k/powerlevel10k"'
+
+    - name: Define dark theme
+      community.general.dconf:
+        key: "/org/gnome/desktop/interface/color-scheme"
+        value: "'prefer-dark'"
+
+    - name: Activate windows maximize, minimize and close buttons
+      community.general.dconf:
+        key: "/org/gnome/desktop/wm/preferences/button-layout"
+        value: "':minimize,maximize,close'"
+      
+    - name: Configure Static IP on Network Interface
+      when: nic_conf.flag == 'true'
+      become: true
+      community.general.nmcli:
+        conn_name: "{{ nic_conf.my_conn_name }}"
+        ifname: "{{ nic_conf.my_ifname }}"
+        type: ethernet
+        ip4: "{{ nic_conf.my_ip4 }}"
+        gw4: "{{ nic_conf.my_gw4 }}"
+        dns4: "{{ nic_conf.my_dns4}}"
+        state: present
+        method4: manual
+        autoconnect: true
